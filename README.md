@@ -4,11 +4,20 @@ A Flask app that shows the company org chart, lets an admin update it from the
 browser, and automatically keeps every employee's career history (promotions,
 transfers, title changes) over the years.
 
+## Frontend choice
+
+The chart is rendered with **d3-org-chart** (the most popular open-source org
+chart library, built on D3 v7) — pan, zoom, expand/collapse, compact layout,
+search with path highlighting, and PNG export all come built in. The backend
+stays plain Flask + Jinja: no build step, no Node toolchain, nothing extra to
+maintain or deploy. The three library files are vendored in `static/vendor/`
+so the app has zero CDN dependencies and works on an intranet.
+
 ## What's inside
 
 | Page | URL | Who |
 |---|---|---|
-| Org chart (collapsible tree) | `/` | everyone |
+| Interactive org chart — pan/zoom, search, compact mode, PNG export | `/` | everyone |
 | Directory with search + department filter | `/directory` | everyone |
 | Employee profile + career timeline | `/employee/<id>` | everyone |
 | Manage people (add / edit / move / exit / delete) | `/admin` | admin only |
@@ -92,5 +101,6 @@ No redeploys needed for any of this — it's all in the database.
 
 - Department list: `DEPARTMENTS` in `app.py`
 - Movement types: `EVENT_TYPES` in `app.py`
-- Branding (colors, fonts): `static/style.css` — brand red is `--red: #C8102E`
+- Branding (colors, fonts): `static/style.css` — brand red is `--red`
+- Department colors on the chart: `DEPT_COLORS` in `templates/chart.html`
 - Sample data: `seed_if_empty()` in `app.py` (only runs on an empty database)

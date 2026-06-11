@@ -40,9 +40,50 @@ db = SQLAlchemy(app)
 EVENT_TYPES = ["Hired", "Promotion", "Lateral Move", "Department Transfer",
                "Title Change", "Re-joined"]
 
-DEPARTMENTS = ["Management", "Sales & Marketing", "Production", "R&D",
-               "Quality Assurance", "Finance & Accounts", "Human Resources",
-               "Supply Chain", "IT", "Exports"]
+DEPARTMENTS = [
+    "Management", "QA & QC", "R&D", "Dry Mix", "TSD", "Admin & IR",
+    "Production", "PPC", "BSR & Logistics", "Stores", "Maintenance",
+    "Accounts & Finance", "Commercial", "Sales", "Export",
+    "Digital Marketing", "Traded Goods", "Reclamation Services",
+    "Purchase", "Projects", "IT", "HR",
+]
+
+# one color per department — used for card accents, avatar rings, legend
+DEPT_COLORS = {
+    "Management":           "#C8102E",
+    "QA & QC":              "#2F9E44",
+    "R&D":                  "#6741D9",
+    "Dry Mix":              "#E8590C",
+    "TSD":                  "#A86E0F",
+    "Admin & IR":           "#D6336C",
+    "Production":           "#F76707",
+    "PPC":                  "#E67700",
+    "BSR & Logistics":      "#94751A",
+    "Stores":               "#5C7A1F",
+    "Maintenance":          "#3B7A57",
+    "Accounts & Finance":   "#1971C2",
+    "Commercial":           "#0B7285",
+    "Sales":                "#087F5B",
+    "Export":               "#2B8A3E",
+    "Digital Marketing":    "#862E9C",
+    "Traded Goods":         "#5C4033",
+    "Reclamation Services": "#364FC7",
+    "Purchase":             "#C92A2A",
+    "Projects":             "#5F3DC4",
+    "IT":                   "#1864AB",
+    "HR":                   "#9C36B5",
+}
+_FALLBACK_COLORS = ["#C8102E", "#0B7285", "#E8590C", "#6741D9", "#2F9E44",
+                    "#1971C2", "#D6336C", "#A86E0F", "#364FC7", "#087F5B"]
+
+
+def dept_color(dept):
+    if dept in DEPT_COLORS:
+        return DEPT_COLORS[dept]
+    return _FALLBACK_COLORS[abs(hash(dept)) % len(_FALLBACK_COLORS)]
+
+
+app.jinja_env.globals["dept_color"] = dept_color
 
 
 # --------------------------------------------------------------------------
@@ -143,14 +184,69 @@ def logout():
 # --------------------------------------------------------------------------
 @app.route("/")
 def chart():
-    roots = (Employee.query
-             .filter_by(manager_id=None, is_active=True)
-             .order_by(Employee.name).all())
     total = Employee.query.filter_by(is_active=True).count()
     departments = (db.session.query(Employee.department)
                    .filter_by(is_active=True).distinct().count())
-    return render_template("chart.html", roots=roots, total=total,
-                           departments=departments)
+    return render_template("chart.html", total=total, departments=departments)
+
+
+@app.route("/api/people")
+def api_people():
+    """Flat employee list consumed by d3-org-chart on the chart page."""
+    people = Employee.query.filter_by(is_active=True).all()
+    promo_counts = {}
+    for ev in RoleEvent.query.filter_by(event_type="Promotion"):
+        promo_counts[ev.employee_id] = promo_counts.get(ev.employee_id, 0) + 1
+    return {
+        "people": [{
+            "id": e.id,
+            "parentId": e.manager_id,
+            "name": e.name,
+            "title": e.title,
+            "department": e.department,
+            "location": e.location or "",
+            "photoUrl": e.photo_url or "",
+            "initials": e.initials,
+            "tenure": e.tenure_years,
+            "promotions": promo_counts.get(e.id, 0),
+        } for e in people]
+    }
+
+
+@app.route("/api/org")
+def api_org():
+    """Flat node list for d3-org-chart. A virtual company node sits at the
+    root so the chart always has a single root even with several
+    manager-less people."""
+    from flask import jsonify
+    emps = Employee.query.filter_by(is_active=True).all()
+    active_ids = {e.id for e in emps}
+
+    nodes = [{
+        "id": "company",
+        "parentId": None,
+        "isCompany": True,
+        "name": "D&H Sécheron",
+        "title": "Electrodes Pvt. Ltd. · since 1966",
+    }]
+    for e in emps:
+        parent = (f"e{e.manager_id}"
+                  if e.manager_id in active_ids else "company")
+        reports = sum(1 for r in e.reports if r.is_active)
+        nodes.append({
+            "id": f"e{e.id}",
+            "parentId": parent,
+            "empId": e.id,
+            "name": e.name,
+            "title": e.title,
+            "department": e.department,
+            "color": dept_color(e.department),
+            "photo": e.photo_url or "",
+            "initials": e.initials,
+            "location": e.location or "",
+            "reports": reports,
+        })
+    return jsonify(nodes)
 
 
 @app.route("/employee/<int:emp_id>")
@@ -333,15 +429,14 @@ def nice_date(d):
 
 
 def seed_if_empty():
-    """Load a small sample hierarchy on first run so the chart isn't blank.
-    Delete these people from the Manage screen and add your real ones."""
+    """Seed the real D&H Secheron org structure (Unit 1 & 3) on first run."""
     if Employee.query.count():
         return
 
     def add(name, title, dept, manager=None, joined=None, location="Indore"):
         emp = Employee(name=name, title=title, department=dept,
                        manager_id=manager.id if manager else None,
-                       joined_on=joined or date(2018, 4, 1),
+                       joined_on=joined or date(2015, 1, 1),
                        location=location)
         db.session.add(emp)
         db.session.flush()
@@ -350,36 +445,45 @@ def seed_if_empty():
                                  start_date=emp.joined_on))
         return emp
 
-    md = add("A. Sharma", "Managing Director", "Management",
-             joined=date(2005, 6, 1), location="Mumbai")
-    coo = add("R. Verma", "Chief Operating Officer", "Management", md,
-              date(2010, 2, 1), "Mumbai")
-    sales = add("P. Iyer", "VP — Sales & Marketing", "Sales & Marketing", md,
-                date(2012, 8, 1), "Mumbai")
-    plant = add("S. Kulkarni", "Plant Head", "Production", coo,
-                date(2014, 1, 15))
-    rnd = add("Dr. N. Joshi", "Head of R&D", "R&D", coo, date(2016, 7, 1))
-    add("M. Patel", "Regional Sales Manager — West", "Sales & Marketing",
-        sales, date(2019, 3, 1), "Mumbai")
-    add("K. Singh", "Regional Sales Manager — North", "Sales & Marketing",
-        sales, date(2020, 11, 1), "Delhi")
-    qa = add("V. Rao", "QA Manager", "Quality Assurance", plant,
-             date(2017, 5, 1))
-    add("T. Mishra", "Production Supervisor", "Production", plant,
-        date(2021, 9, 1))
-    add("A. Khan", "Welding Metallurgist", "R&D", rnd, date(2022, 2, 1))
+    # Board / top level
+    vc  = add("Arvind Maheshwari", "Vice Chairman", "Management",
+              joined=date(1990, 1, 1), location="Mumbai")
+    add("Arnav Maheshwari", "Executive Director", "Management", vc,
+        date(2005, 6, 1), "Mumbai")
+    jmd = add("Dr. TJP Rao", "Joint Managing Director", "Management", vc,
+              date(2000, 4, 1), "Indore")
 
-    # give one person a visible promotion history for the demo
-    promo_date = date(2023, 4, 1)
-    open_ev = next(e for e in qa.events if e.end_date is None)
-    open_ev.end_date = promo_date
-    open_ev.title, open_ev.department = "QA Engineer", "Quality Assurance"
-    qa.title = "QA Manager"
-    db.session.add(RoleEvent(employee_id=qa.id, event_type="Promotion",
-                             title="QA Manager",
-                             department="Quality Assurance",
-                             start_date=promo_date,
-                             notes="Promoted after NABL audit success."))
+    # Direct reports to JMD
+    add("Prashant Tilak",        "AGM - QA & QC",             "QA & QC",           jmd, date(2010, 3, 1))
+    add("Dr. Suresh Telu",       "VP - R&D",                  "R&D",               jmd, date(2008, 7, 1))
+    add("Narendra Udasi",        "AGM - Dry Mix",             "Dry Mix",           jmd, date(2012, 5, 1))
+    add("Rajesh Kumar",          "DGM - TSD",                 "TSD",               jmd, date(2011, 9, 1))
+    add("Brijbhan Singh Rajput", "AGM - Admin & IR",          "Admin & IR",        jmd, date(2009, 2, 1))
+    prod = add("Ripal Naik",     "AVP - Production",          "Production",        jmd, date(2013, 6, 1))
+    add("L.R. Golani",           "GM - Accounts & Finance",   "Accounts & Finance",jmd, date(2007, 4, 1))
+    add("Shivi Chaturvedi",      "GM - Commercial",           "Commercial",        jmd, date(2014, 1, 1))
+    sales= add("V. Ganesh Kumar","Vice President - Sales",    "Sales",             jmd, date(2006, 8, 1), "Mumbai")
+    add("Nilesh Paul",           "AGM - Purchase",            "Purchase",          jmd, date(2015, 3, 1))
+    add("Riyush Godha",          "Sr. Manager - Projects",    "Projects",          jmd, date(2018, 7, 1))
+    add("Kedar Joshi",           "DGM - IT & EDP",            "IT",                jmd, date(2010, 11, 1))
+    add("Rahul Singh",           "DGM - HR",                  "HR",                jmd, date(2012, 4, 1))
+
+    # Under Production
+    bsr = add("Dushyant Joshi",  "Manager - BSR & Logistics", "BSR & Logistics",   prod, date(2017, 8, 1))
+    add("Sachin Jaiswal",        "Senior Manager",            "BSR & Logistics",   bsr,  date(2019, 3, 1))
+    add("Devendra Gehlot",       "Senior Manager - PPC",      "PPC",               prod, date(2016, 2, 1))
+    add("Arvind Bhadoriya",      "Manager - Stores",          "Stores",            prod, date(2016, 6, 1))
+    add("Neeraj Sharma",         "AGM - Maintenance",         "Maintenance",       prod, date(2014, 9, 1))
+
+    # Under Sales
+    exp  = add("Sankha Das",     "General Manager - Export",  "Export",            sales, date(2011, 5, 1), "Mumbai")
+    add("Rajiv Singh Parihar",   "AGM - Export",              "Export",            exp,   date(2015, 9, 1), "Mumbai")
+    srid = add("G. Sridhar",     "General Manager",           "Sales",             sales, date(2009, 3, 1), "Hyderabad")
+    add("Srinivas Kanche",       "DGM - Sales",               "Sales",             srid,  date(2013, 7, 1), "Hyderabad")
+    add("Anjali Lalappan",       "Sr. Executive - Digital Marketing", "Digital Marketing", sales, date(2020, 6, 1))
+    add("Atul Mishra",           "Asst. Manager - Traded Goods",      "Traded Goods",      sales, date(2019, 11, 1))
+    add("Manoj Sao",             "DGM - Reclamation Services",        "Reclamation Services", sales, date(2012, 8, 1))
+
     db.session.commit()
 
 

@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Org Chart{% endblock %} · D&H Sécheron</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Saira+SemiCondensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="{% block bodyclass %}{% endblock %}">
 <header class="topbar">
   <a class="brand" href="{{ url_for('chart') }}">
     <span class="brand-mark">D&amp;H</span>
@@ -37,11 +37,12 @@
   {% endif %}
 {% endwith %}
 
+{% block shell %}
 <main>{% block body %}{% endblock %}</main>
-
 <footer class="foot">
   <span>D&amp;H Sécheron Electrodes Pvt. Ltd. — internal use</span>
   <span class="mono">since 1966</span>
 </footer>
+{% endblock %}
 </body>
 </html>

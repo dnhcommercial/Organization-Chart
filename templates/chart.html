@@ -2,10 +2,10 @@
 {% block title %}Organization Chart{% endblock %}
 {% block body %}
 
-<section class="page-head">
+<section class="chart-head">
   <div>
     <p class="eyebrow mono">Organization</p>
-    <h1>Who reports to whom</h1>
+    <h1>D&amp;H Sécheron — reporting structure</h1>
   </div>
   <div class="head-stats mono">
     <span><strong>{{ total }}</strong> people</span>
@@ -13,53 +13,180 @@
   </div>
 </section>
 
-{% macro node(emp) %}
-  <li>
-    <div class="card" data-dept="{{ emp.department }}">
-      <a class="card-link" href="{{ url_for('employee', emp_id=emp.id) }}">
-        <span class="avatar">
-          {% if emp.photo_url %}<img src="{{ emp.photo_url }}" alt="">{% else %}{{ emp.initials }}{% endif %}
-        </span>
-        <span class="card-text">
-          <span class="card-name">{{ emp.name }}</span>
-          <span class="card-title">{{ emp.title }}</span>
-          <span class="card-dept mono">{{ emp.department }}</span>
-        </span>
-      </a>
-      {% set active_reports = emp.reports | selectattr('is_active') | list %}
-      {% if active_reports %}
-        <button class="toggle mono" type="button" aria-expanded="true"
-                title="Collapse / expand team">{{ active_reports | length }}</button>
-      {% endif %}
+<div class="chart-shell">
+  <div class="chart-toolbar">
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="search" list="people-list" placeholder="Find a person…" autocomplete="off">
+      <datalist id="people-list"></datalist>
     </div>
-    {% if active_reports %}
-      <ul>
-        {% for r in active_reports | sort(attribute='name') %}{{ node(r) }}{% endfor %}
-      </ul>
-    {% endif %}
-  </li>
-{% endmacro %}
-
-{% if roots %}
-<div class="chart-scroll">
-  <ul class="tree">
-    {% for root in roots %}{{ node(root) }}{% endfor %}
-  </ul>
+    <div class="tool-group">
+      <button class="tool" id="btn-fit" title="Fit chart to screen">Fit</button>
+      <button class="tool" id="btn-expand" title="Expand every branch">Expand all</button>
+      <button class="tool" id="btn-collapse" title="Collapse to the top">Collapse</button>
+      <button class="tool" id="btn-compact" title="Switch between compact and wide layout" aria-pressed="true">Compact</button>
+    </div>
+    <div class="tool-group">
+      <button class="tool" id="btn-zoom-out" title="Zoom out">−</button>
+      <button class="tool" id="btn-zoom-in" title="Zoom in">+</button>
+      <button class="tool accent" id="btn-export" title="Download the chart as an image">Export PNG</button>
+    </div>
+  </div>
+  <div class="chart-stage" id="chart"></div>
+  <div class="chart-legend mono" id="legend"></div>
 </div>
-{% else %}
-<div class="empty">
+
+<div class="empty" id="empty" hidden>
   <p>The chart is empty. Sign in as admin and add the first person.</p>
-  <a class="btn" href="{{ url_for('login') }}">Sign in</a>
+  <a class="btn primary" href="{{ url_for('login') }}">Sign in</a>
 </div>
-{% endif %}
 
+<script src="{{ url_for('static', filename='vendor/d3.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/d3-flextree.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/d3-org-chart.min.js') }}"></script>
 <script>
-document.querySelectorAll('.toggle').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const li = btn.closest('li');
-    const open = li.classList.toggle('collapsed') === false;
-    btn.setAttribute('aria-expanded', open);
+const DEPT_COLORS = {
+  "Management":         "#ED2C49",
+  "Sales & Marketing":  "#4DA3FF",
+  "Production":         "#FFB020",
+  "R&D":                "#9D7BFF",
+  "Quality Assurance":  "#2FD1A4",
+  "Finance & Accounts": "#5CE1E6",
+  "Human Resources":    "#FF7AB8",
+  "Supply Chain":       "#B7C25C",
+  "IT":                 "#6E8BFF",
+  "Exports":            "#FF9C6B",
+};
+const FALLBACK = ["#ED2C49","#4DA3FF","#FFB020","#9D7BFF","#2FD1A4","#5CE1E6","#FF7AB8","#B7C25C"];
+const deptColor = d => DEPT_COLORS[d] ||
+  FALLBACK[[...d].reduce((a, c) => a + c.charCodeAt(0), 0) % FALLBACK.length];
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+let chart;
+
+fetch("{{ url_for('api_people') }}")
+  .then(r => r.json())
+  .then(({ people }) => {
+    if (!people.length) {
+      document.getElementById("empty").hidden = false;
+      document.querySelector(".chart-shell").hidden = true;
+      return;
+    }
+
+    // d3-org-chart needs a single root: if several people have no manager,
+    // hang them under a virtual company node.
+    const roots = people.filter(p => p.parentId == null);
+    let data = people.map(p => ({ ...p }));
+    if (roots.length > 1) {
+      data.forEach(p => { if (p.parentId == null) p.parentId = "company"; });
+      data.unshift({ id: "company", parentId: null, isCompany: true,
+                     name: "D&H Sécheron", title: "Electrodes Pvt. Ltd.",
+                     department: "Management" });
+    }
+
+    // search index + legend
+    const dl = document.getElementById("people-list");
+    people.forEach(p => {
+      const o = document.createElement("option");
+      o.value = p.name; o.dataset.id = p.id;
+      dl.appendChild(o);
+    });
+    const depts = [...new Set(people.map(p => p.department))].sort();
+    document.getElementById("legend").innerHTML = depts.map(d =>
+      `<span class="legend-item"><i style="background:${deptColor(d)}"></i>${esc(d)}</span>`).join("");
+
+    const nodeHTML = d => {
+      const p = d.data;
+      if (p.isCompany) return `
+        <div class="org-card company" style="width:${d.width}px;height:${d.height}px">
+          <span class="org-mark">D&amp;H</span>
+          <span><b>${esc(p.name)}</b><small>${esc(p.title)}</small></span>
+        </div>`;
+      const c = deptColor(p.department);
+      const avatar = p.photoUrl
+        ? `<img class="org-avatar" src="${esc(p.photoUrl)}" alt="">`
+        : `<span class="org-avatar" style="background:${c}22;color:${c};border-color:${c}55">${esc(p.initials)}</span>`;
+      return `
+        <div class="org-card" style="width:${d.width}px;height:${d.height}px;--dept:${c}">
+          <div class="org-stripe"></div>
+          <div class="org-body">
+            ${avatar}
+            <div class="org-text">
+              <span class="org-name">${esc(p.name)}</span>
+              <span class="org-title">${esc(p.title)}</span>
+              <span class="org-meta mono">
+                <i class="dot" style="background:${c}"></i>${esc(p.department)}
+                ${p.promotions ? `<em class="promo" title="Promotions">▲${p.promotions}</em>` : ""}
+              </span>
+            </div>
+          </div>
+          <div class="org-foot mono">
+            <span>${esc(p.location)}</span>
+            <span>${d.data._directSubordinates ? d.data._directSubordinates + " reports" : ""}</span>
+          </div>
+        </div>`;
+    };
+
+    chart = new d3.OrgChart()
+      .container("#chart")
+      .data(data)
+      .nodeWidth(() => 264)
+      .nodeHeight(() => 118)
+      .childrenMargin(() => 56)
+      .compactMarginBetween(() => 28)
+      .compactMarginPair(() => 60)
+      .siblingsMargin(() => 24)
+      .neighbourMargin(() => 40)
+      .svgHeight(Math.max(window.innerHeight - 290, 480))
+      .compact(true)
+      .duration(380)
+      .nodeContent(nodeHTML)
+      .buttonContent(({ node }) =>
+        `<div class="org-btn mono">${node.children ? "▴" : "▾"}&nbsp;${node.data._directSubordinates}</div>`)
+      .nodeButtonWidth(() => 56)
+      .nodeButtonHeight(() => 24)
+      .nodeButtonX(() => -28)
+      .nodeButtonY(() => -12)
+      .onNodeClick(d => {
+        if (!d.data.isCompany) window.location.href = "/employee/" + d.data.id;
+      })
+      .nodeUpdate(function (d) {
+        d3.select(this).select(".node-rect")
+          .attr("stroke", d.data._highlighted || d.data._upToTheRootHighlighted ? "#ED2C49" : "none")
+          .attr("stroke-width", 3).attr("rx", 12);
+      })
+      .linkUpdate(function (d) {
+        d3.select(this)
+          .attr("stroke", d.data._upToTheRootHighlighted ? "#ED2C49" : "#39404D")
+          .attr("stroke-width", d.data._upToTheRootHighlighted ? 3 : 1.6);
+      })
+      .render().fit();
+
+    // toolbar
+    const $ = id => document.getElementById(id);
+    $("btn-fit").onclick = () => chart.fit();
+    $("btn-expand").onclick = () => chart.expandAll().fit();
+    $("btn-collapse").onclick = () => chart.collapseAll().fit();
+    $("btn-zoom-in").onclick = () => chart.zoomIn();
+    $("btn-zoom-out").onclick = () => chart.zoomOut();
+    $("btn-export").onclick = () =>
+      chart.exportImg({ full: true, scale: 3, backgroundColor: "#0C0E12" });
+    let compactOn = true;
+    $("btn-compact").onclick = e => {
+      compactOn = !compactOn;
+      chart.compact(compactOn).render().fit();
+      e.currentTarget.setAttribute("aria-pressed", compactOn);
+    };
+    $("search").addEventListener("change", e => {
+      const hit = [...dl.options].find(o => o.value === e.target.value);
+      chart.clearHighlighting();
+      if (hit) chart.setUpToTheRootHighlighted(hit.dataset.id).setCentered(hit.dataset.id).render();
+    });
+    $("search").addEventListener("input", e => {
+      if (!e.target.value) { chart.clearHighlighting(); chart.fit(); }
+    });
   });
-});
 </script>
 {% endblock %}
