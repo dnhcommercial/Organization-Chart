@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit ' + emp.name if emp else 'Add employee' }}{% endblock %}
+{% block body %}
+
+<section class="page-head">
+  <div>
+    <p class="eyebrow mono">Admin</p>
+    <h1>{{ 'Edit details — ' + emp.name if emp else 'Add a new employee' }}</h1>
+  </div>
+</section>
+
+{% if emp %}
+<p class="hint">This form edits contact details only. To change title, department or manager,
+use <a href="{{ url_for('employee_move', emp_id=emp.id) }}">Record movement</a> so the career
+history stays accurate.</p>
+{% endif %}
+
+<form class="form" method="post">
+  <label>Full name
+    <input name="name" required value="{{ emp.name if emp else '' }}">
+  </label>
+
+  {% if not emp %}
+  <div class="form-grid">
+    <label>Title / designation
+      <input name="title" required placeholder="e.g. Regional Sales Manager">
+    </label>
+    <label>Department
+      <select name="department" required>
+        {% for d in departments %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Reports to
+      <select name="manager_id">
+        <option value="">— No one (top of chart) —</option>
+        {% for m in managers %}<option value="{{ m.id }}">{{ m.name }} — {{ m.title }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Date of joining
+      <input type="date" name="joined_on">
+    </label>
+  </div>
+  {% else %}
+  <label>Date of joining
+    <input type="date" name="joined_on" value="{{ emp.joined_on.isoformat() if emp.joined_on }}">
+  </label>
+  {% endif %}
+
+  <div class="form-grid">
+    <label>Email
+      <input type="email" name="email" value="{{ emp.email or '' if emp else '' }}">
+    </label>
+    <label>Phone
+      <input name="phone" value="{{ emp.phone or '' if emp else '' }}">
+    </label>
+    <label>Location
+      <input name="location" placeholder="e.g. Indore" value="{{ emp.location or '' if emp else '' }}">
+    </label>
+    <label>Photo URL <span class="optional">(optional)</span>
+      <input name="photo_url" value="{{ emp.photo_url or '' if emp else '' }}">
+    </label>
+  </div>
+
+  {% if not emp %}
+  <label>Notes on joining <span class="optional">(optional)</span>
+    <textarea name="notes" rows="2"></textarea>
+  </label>
+  {% endif %}
+
+  <div class="form-actions">
+    <button class="btn primary" type="submit">{{ 'Save details' if emp else 'Add to chart' }}</button>
+    <a class="btn" href="{{ url_for('admin') }}">Cancel</a>
+  </div>
+</form>
+
+{% endblock %}

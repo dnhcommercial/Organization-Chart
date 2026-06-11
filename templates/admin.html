@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Manage{% endblock %}
+{% block body %}
+
+<section class="page-head">
+  <div>
+    <p class="eyebrow mono">Admin</p>
+    <h1>Manage people</h1>
+  </div>
+  <a class="btn primary" href="{{ url_for('employee_new') }}">Add employee</a>
+</section>
+
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Title</th><th>Department</th><th>Manager</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for e in employees %}
+    <tr class="{{ 'inactive' if not e.is_active }}">
+      <td><a href="{{ url_for('employee', emp_id=e.id) }}">{{ e.name }}</a>{% if not e.is_active %} <span class="tag">exited</span>{% endif %}</td>
+      <td>{{ e.title }}</td>
+      <td>{{ e.department }}</td>
+      <td>{{ e.manager.name if e.manager else '—' }}</td>
+      <td class="row-actions">
+        <a class="btn sm" href="{{ url_for('employee_move', emp_id=e.id) }}">Move</a>
+        <a class="btn sm" href="{{ url_for('employee_edit', emp_id=e.id) }}">Edit</a>
+        <form method="post" action="{{ url_for('employee_toggle', emp_id=e.id) }}">
+          <button class="btn sm" type="submit">{{ 'Mark exited' if e.is_active else 'Re-activate' }}</button>
+        </form>
+        <form method="post" action="{{ url_for('employee_delete', emp_id=e.id) }}"
+              onsubmit="return confirm('Permanently delete {{ e.name }} and their full history?');">
+          <button class="btn sm danger" type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p class="hint">Use <strong>Move</strong> for promotions, transfers and title changes — it keeps the
+career history. <strong>Edit</strong> is only for contact details. <strong>Mark exited</strong> hides
+someone from the chart but keeps their record; <strong>Delete</strong> erases everything.</p>
+
+{% endblock %}

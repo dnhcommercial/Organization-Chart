@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Organization Chart{% endblock %}
+{% block body %}
+
+<section class="page-head">
+  <div>
+    <p class="eyebrow mono">Organization</p>
+    <h1>Who reports to whom</h1>
+  </div>
+  <div class="head-stats mono">
+    <span><strong>{{ total }}</strong> people</span>
+    <span><strong>{{ departments }}</strong> departments</span>
+  </div>
+</section>
+
+{% macro node(emp) %}
+  <li>
+    <div class="card" data-dept="{{ emp.department }}">
+      <a class="card-link" href="{{ url_for('employee', emp_id=emp.id) }}">
+        <span class="avatar">
+          {% if emp.photo_url %}<img src="{{ emp.photo_url }}" alt="">{% else %}{{ emp.initials }}{% endif %}
+        </span>
+        <span class="card-text">
+          <span class="card-name">{{ emp.name }}</span>
+          <span class="card-title">{{ emp.title }}</span>
+          <span class="card-dept mono">{{ emp.department }}</span>
+        </span>
+      </a>
+      {% set active_reports = emp.reports | selectattr('is_active') | list %}
+      {% if active_reports %}
+        <button class="toggle mono" type="button" aria-expanded="true"
+                title="Collapse / expand team">{{ active_reports | length }}</button>
+      {% endif %}
+    </div>
+    {% if active_reports %}
+      <ul>
+        {% for r in active_reports | sort(attribute='name') %}{{ node(r) }}{% endfor %}
+      </ul>
+    {% endif %}
+  </li>
+{% endmacro %}
+
+{% if roots %}
+<div class="chart-scroll">
+  <ul class="tree">
+    {% for root in roots %}{{ node(root) }}{% endfor %}
+  </ul>
+</div>
+{% else %}
+<div class="empty">
+  <p>The chart is empty. Sign in as admin and add the first person.</p>
+  <a class="btn" href="{{ url_for('login') }}">Sign in</a>
+</div>
+{% endif %}
+
+<script>
+document.querySelectorAll('.toggle').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const li = btn.closest('li');
+    const open = li.classList.toggle('collapsed') === false;
+    btn.setAttribute('aria-expanded', open);
+  });
+});
+</script>
+{% endblock %}

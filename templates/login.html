@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Admin sign in{% endblock %}
+{% block body %}
+
+<div class="login-wrap">
+  <form class="form login" method="post">
+    <p class="eyebrow mono">Admin</p>
+    <h1>Sign in to manage the chart</h1>
+    <label>Password
+      <input type="password" name="password" required autofocus>
+    </label>
+    <button class="btn primary" type="submit">Sign in</button>
+  </form>
+</div>
+
+{% endblock %}

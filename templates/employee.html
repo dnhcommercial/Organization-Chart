@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ emp.name }}{% endblock %}
+{% block body %}
+
+<section class="profile-head">
+  <span class="avatar lg">
+    {% if emp.photo_url %}<img src="{{ emp.photo_url }}" alt="">{% else %}{{ emp.initials }}{% endif %}
+  </span>
+  <div class="profile-id">
+    <p class="eyebrow mono">{{ emp.department }}{% if not emp.is_active %} · exited{% endif %}</p>
+    <h1>{{ emp.name }}</h1>
+    <p class="profile-title">{{ emp.title }}</p>
+    <p class="profile-meta mono">
+      {% if emp.location %}{{ emp.location }} · {% endif %}
+      joined {{ emp.joined_on | nice_date }} · {{ emp.tenure_years }} yrs
+      {% if emp.email %} · {{ emp.email }}{% endif %}
+      {% if emp.phone %} · {{ emp.phone }}{% endif %}
+    </p>
+    <p class="profile-meta">
+      {% if emp.manager %}Reports to <a href="{{ url_for('employee', emp_id=emp.manager.id) }}">{{ emp.manager.name }}</a>{% else %}Top of the chart{% endif %}
+      {% set active_reports = emp.reports | selectattr('is_active') | list %}
+      {% if active_reports %} · leads a team of {{ active_reports | length }}{% endif %}
+    </p>
+  </div>
+  {% if session.get('is_admin') %}
+  <div class="profile-actions">
+    <a class="btn primary" href="{{ url_for('employee_move', emp_id=emp.id) }}">Record movement</a>
+    <a class="btn" href="{{ url_for('employee_edit', emp_id=emp.id) }}">Edit details</a>
+  </div>
+  {% endif %}
+</section>
+
+{% if active_reports %}
+<section class="block">
+  <h2 class="block-title">Team</h2>
+  <div class="chip-row">
+    {% for r in active_reports | sort(attribute='name') %}
+      <a class="chip" href="{{ url_for('employee', emp_id=r.id) }}">
+        <strong>{{ r.name }}</strong><span>{{ r.title }}</span>
+      </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="block">
+  <h2 class="block-title">Career at D&amp;H Sécheron</h2>
+  <ol class="seam">
+    {% for ev in history %}
+    <li class="seam-item {{ 'promo' if ev.event_type == 'Promotion' }} {{ 'current' if not ev.end_date }}">
+      <span class="bead" aria-hidden="true"></span>
+      <div class="seam-body">
+        <p class="seam-dates mono">{{ ev.start_date | nice_date }} — {{ ev.end_date | nice_date }} · {{ ev.duration_label }}</p>
+        <p class="seam-role">{{ ev.title }}</p>
+        <p class="seam-meta">{{ ev.department }} · <span class="tag {{ 'tag-promo' if ev.event_type == 'Promotion' }}">{{ ev.event_type }}</span></p>
+        {% if ev.notes %}<p class="seam-notes">{{ ev.notes }}</p>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+
+{% endblock %}

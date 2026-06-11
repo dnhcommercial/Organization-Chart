@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Record movement — {{ emp.name }}{% endblock %}
+{% block body %}
+
+<section class="page-head">
+  <div>
+    <p class="eyebrow mono">Admin</p>
+    <h1>Record movement — {{ emp.name }}</h1>
+  </div>
+</section>
+
+<p class="hint">Currently <strong>{{ emp.title }}</strong> in <strong>{{ emp.department }}</strong>{% if emp.manager %},
+reporting to {{ emp.manager.name }}{% endif %}. Submitting this form closes that role on the
+effective date and starts the new one — the change appears on their career timeline.</p>
+
+<form class="form" method="post">
+  <div class="form-grid">
+    <label>Type of movement
+      <select name="event_type" required>
+        {% for t in event_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Effective date
+      <input type="date" name="effective_date" required value="{{ today if today else '' }}">
+    </label>
+    <label>New title / designation
+      <input name="title" required value="{{ emp.title }}">
+    </label>
+    <label>New department
+      <select name="department" required>
+        {% for d in departments %}
+          <option value="{{ d }}" {{ 'selected' if d == emp.department }}>{{ d }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Now reports to
+      <select name="manager_id">
+        <option value="">— No one (top of chart) —</option>
+        {% for m in managers %}
+          <option value="{{ m.id }}" {{ 'selected' if emp.manager_id == m.id }}>{{ m.name }} — {{ m.title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <label>Notes <span class="optional">(optional — e.g. reason, appraisal cycle)</span>
+    <textarea name="notes" rows="2"></textarea>
+  </label>
+  <div class="form-actions">
+    <button class="btn primary" type="submit">Record movement</button>
+    <a class="btn" href="{{ url_for('employee', emp_id=emp.id) }}">Cancel</a>
+  </div>
+</form>
+
+<script>
+  const d = document.querySelector('input[name=effective_date]');
+  if (!d.value) d.value = new Date().toISOString().slice(0, 10);
+</script>
+
+{% endblock %}

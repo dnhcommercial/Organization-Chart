@@ -1,0 +1,22 @@
+# Render Blueprint — deploys the web service + a free Postgres database.
+# In the Render dashboard choose "New > Blueprint" and point it at this repo.
+services:
+  - type: web
+    name: dnh-orgchart
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_PASSWORD
+        sync: false            # you will be prompted to type it on first deploy
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dnh-orgchart-db
+          property: connectionString
+
+databases:
+  - name: dnh-orgchart-db
+    plan: free
