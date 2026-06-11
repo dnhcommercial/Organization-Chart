@@ -16,6 +16,9 @@ import os
 from datetime import date, datetime
 from functools import wraps
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from flask import (Flask, abort, flash, redirect, render_template, request,
                    session, url_for)
 from flask_sqlalchemy import SQLAlchemy
