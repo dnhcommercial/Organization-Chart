@@ -6,4 +6,3 @@ instance/
 .env
 .venv/
 venv/
-static/vendor/
